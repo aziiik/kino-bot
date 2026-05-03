@@ -1,141 +1,279 @@
+require('dotenv').config();
 const { Telegraf, Markup } = require('telegraf');
-const Database = require('better-sqlite3');
-const bot = new Telegraf('8348798186:AAEMqMzk7NbeSYZQgAs9g1O_QNsMhL2xQTs');   // ← tokeningizni qo‘ying
+const fs = require('fs');
 
-// ================= DATABASE =================
-const db = new Database('movies.db');
+const bot = new Telegraf(process.env.BOT_TOKEN);
 
-db.exec(`
-  CREATE TABLE IF NOT EXISTS movies (
-    code TEXT PRIMARY KEY,
-    title TEXT,
-    file_id TEXT,
-    views INTEGER DEFAULT 0,
-    likes TEXT DEFAULT '[]'
-  );
-`);
+// ===== JSON =====
+function loadData() {
+  return JSON.parse(fs.readFileSync('data.json'));
+}
+function saveData(data) {
+  fs.writeFileSync('data.json', JSON.stringify(data, null, 2));
+}
 
-db.exec(`
-  CREATE TABLE IF NOT EXISTS users (
-    user_id INTEGER PRIMARY KEY,
-    username TEXT
-  );
-`);
-
-// ================= YORDAMCHI FUNKSIYALAR =================
-const isAdmin = (id) => admins.includes(id);   // pastda admins ni saqlaymiz
-const isSupport = (id) => supports.includes(id);
-const isStaff = (id) => isAdmin(id) || isSupport(id);
-
-// Adminlar ro‘yxati (o‘zgartiring)
-let admins = [YOUR_ID]; 
-let supports = [];
-
-// ================= START =================
-// bot.start((ctx) => { ... }); // bu qismini o‘zgartirmadim, o‘zingiz qoldiring
-
-// ================= KINO QO‘SHISH (Video) =================
-bot.on('video', (ctx) => {
-  const userId = ctx.from.id;
-  if (!isStaff(userId)) return;
-
-  const stateData = state[userId];
-  if (!stateData || stateData.step !== 'video') return;
-
-  const insert = db.prepare(`
-    INSERT OR REPLACE INTO movies (code, title, file_id) 
-    VALUES (?, ?, ?)
-  `);
-
-  insert.run(stateData.code, stateData.title, ctx.message.video.file_id);
-
-  delete state[userId];
-  ctx.reply("✅ Kino muvaffaqiyatli qo‘shildi!");
-});
-
-// ================= TEXT (Kod yuborilganda) =================
-bot.on('text', (ctx) => {
-  const text = ctx.message.text.trim();
-  const userId = ctx.from.id;
-
-  // ... oldingi button va admin logikangiz qolsin ...
-
-  // Kino izlash
-  const movieStmt = db.prepare("SELECT * FROM movies WHERE code = ?");
-  const movie = movieStmt.get(text);
-
-  if (movie) {
-    let likes = [];
-    try { likes = JSON.parse(movie.likes); } catch(e) {}
-
-    movie.views = (movie.views || 0) + 1;
-
-    // views ni yangilash
-    db.prepare("UPDATE movies SET views = ? WHERE code = ?")
-      .run(movie.views, text);
-
-    const percent = likes.length > 0 
-      ? Math.round((likes.length / movie.views) * 100) 
-      : 0;
-
-    ctx.replyWithVideo(movie.file_id, {
-      caption: `🎬 ${movie.title}\n👁 ${movie.views} ta ko‘rish\n👍 ${percent}% like`,
-      ...Markup.inlineKeyboard([
-        [Markup.button.callback("👍 Like", `like_${movie.code}`)]
-      ])
-    });
-    return;
-  }
-
-  // Agar kod topilmasa
-  ctx.reply("❌ Bunday kod topilmadi.");
-});
-
-// ================= LIKE =================
-bot.action(/like_(.+)/, (ctx) => {
-  const code = ctx.match[1];
-  const userId = ctx.from.id;
-
-  const movie = db.prepare("SELECT likes FROM movies WHERE code = ?").get(code);
-  if (!movie) return ctx.answerCbQuery("Kino topilmadi");
-
-  let likes = [];
-  try { likes = JSON.parse(movie.likes); } catch(e) {}
-
-  if (likes.includes(userId)) {
-    return ctx.answerCbQuery("Siz allaqachon like bosgansiz!");
-  }
-
-  likes.push(userId);
-
-  db.prepare("UPDATE movies SET likes = ? WHERE code = ?")
-    .run(JSON.stringify(likes), code);
-
-  ctx.answerCbQuery("👍 Like qabul qilindi");
-});
-
-// ================= ADMIN: KINO QO‘SHISH (state) =================
-// bot.command('admin', (ctx) => { ... }); // o‘zingizniki qolsin
-
-// Kino qo‘shish jarayoni (state)
+// ===== STATE =====
 let state = {};
 
-bot.on('text', (ctx) => {
-  // ... oldingi state logikasi ...
+// ===== ROLE =====
+function isAdmin(id) {
+  return loadData().admins.includes(id);
+}
+function isSupport(id) {
+  return loadData().supports.includes(id);
+}
+function isStaff(id) {
+  return isAdmin(id) || isSupport(id);
+}
 
-  if (state[userId]?.step === 'code') {
-    state[userId].code = text;
-    state[userId].step = 'title';
-    return ctx.reply("Kino nomini yozing:");
-  }
+// ===== USER SAVE =====
+bot.use((ctx, next) => {
+  let data = loadData();
+  let id = ctx.from.id;
 
-  if (state[userId]?.step === 'title') {
-    state[userId].title = text;
-    state[userId].step = 'video';
-    return ctx.reply("Endi kinoni video sifatida yuboring:");
+  if (!data.users.includes(id)) {
+    data.users.push(id);
+    saveData(data);
   }
-  // qolgan qismlar...
+  return next();
 });
 
+// ===== START =====
+bot.start((ctx) => {
+  ctx.reply("🎬 Kino botga xush kelibsiz!\nKod yuboring:");
+});
+
+// ===== ADMIN PANEL =====
+bot.command('admin', (ctx) => {
+  if (!isStaff(ctx.from.id)) return ctx.reply("❌ Ruxsat yo‘q");
+
+  ctx.reply("⚙️ Panel:", Markup.keyboard([
+    ['➕ Kino qo‘shish','❌ Kino o‘chirish'],
+    ['📢 Xabar yuborish','📊 Statistika'],
+    ['👑 Admin qo‘shish','❌ Admin o‘chirish'],
+    ['🛠 Support qo‘shish','🚫 Support o‘chirish']
+  ]).resize());
+});
+
+// ===== TEXT =====
+bot.on('text', async (ctx) => {
+  let id = ctx.from.id;
+  let text = ctx.message.text;
+  let data = loadData();
+
+  // ===== PANEL BUTTONS =====
+  if (text === '➕ Kino qo‘shish') {
+    if (!isStaff(id)) return;
+    state[id] = { step: 'code' };
+    return ctx.reply("🎬 Kino kodi:");
+  }
+
+  if (text === '❌ Kino o‘chirish') {
+    if (!isStaff(id)) return;
+    state[id] = { step: 'del_movie' };
+    return ctx.reply("❗ O‘chiriladigan kino kodini yubor:");
+  }
+
+  if (text === '📢 Xabar yuborish') {
+    if (!isStaff(id)) return;
+    state[id] = { step: 'broadcast' };
+    return ctx.reply("✍️ Xabar yoz:");
+  }
+
+  if (text === '📊 Statistika') {
+    let totalLikes = data.movies.reduce((a,m)=>a + m.likes.length,0);
+
+    let topView = [...data.movies].sort((a,b)=>b.views-a.views)[0];
+    let topLike = [...data.movies].sort((a,b)=>b.likes.length-a.likes.length)[0];
+
+    return ctx.reply(`📊 BOT STATISTIKASI
+
+👥 Foydalanuvchilar: ${data.users.length}
+🎬 Kinolar soni: ${data.movies.length}
+👍 Umumiy like: ${totalLikes}
+
+🔥 Eng ko‘p ko‘rilgan:
+${topView ? topView.title + " (" + topView.views + ")" : "yo‘q"}
+
+❤️ Eng ko‘p like:
+${topLike ? topLike.title + " (" + topLike.likes.length + ")" : "yo‘q"}
+`);
+  }
+
+  if (text === '👑 Admin qo‘shish') {
+    if (!isAdmin(id)) return;
+    state[id] = { step: 'add_admin' };
+    return ctx.reply("Admin ID:");
+  }
+
+  if (text === '❌ Admin o‘chirish') {
+    if (!isAdmin(id)) return;
+
+    return ctx.reply("Adminlar:", Markup.inlineKeyboard(
+      data.admins.map(a => [
+        Markup.button.callback(`❌ ${a}`, `deladmin_${a}`)
+      ])
+    ));
+  }
+
+  if (text === '🛠 Support qo‘shish') {
+    if (!isAdmin(id)) return;
+    state[id] = { step: 'add_support' };
+    return ctx.reply("Support ID:");
+  }
+
+  if (text === '🚫 Support o‘chirish') {
+    if (!isAdmin(id)) return;
+
+    return ctx.reply("Supportlar:", Markup.inlineKeyboard(
+      data.supports.map(s => [
+        Markup.button.callback(`❌ ${s}`, `delsup_${s}`)
+      ])
+    ));
+  }
+
+  // ===== STATE =====
+  if (state[id]?.step === 'broadcast') {
+    delete state[id];
+
+    for (let user of data.users) {
+      try {
+        await ctx.telegram.sendMessage(user, text);
+      } catch {}
+    }
+
+    return ctx.reply("✅ Yuborildi");
+  }
+
+  if (state[id]?.step === 'add_admin') {
+    let uid = Number(text);
+
+    if (!data.admins.includes(uid)) {
+      data.admins.push(uid);
+      saveData(data);
+    }
+
+    delete state[id];
+    return ctx.reply("✅ Admin qo‘shildi");
+  }
+
+  if (state[id]?.step === 'add_support') {
+    let uid = Number(text);
+
+    if (!data.supports.includes(uid)) {
+      data.supports.push(uid);
+      saveData(data);
+    }
+
+    delete state[id];
+    return ctx.reply("✅ Support qo‘shildi");
+  }
+
+  if (state[id]?.step === 'del_movie') {
+    let code = text;
+
+    let oldLen = data.movies.length;
+    data.movies = data.movies.filter(m => m.code !== code);
+
+    saveData(data);
+    delete state[id];
+
+    if (data.movies.length === oldLen) {
+      return ctx.reply("❌ Bunday kino topilmadi");
+    }
+
+    return ctx.reply("✅ Kino o‘chirildi");
+  }
+
+  if (state[id]?.step === 'code') {
+    state[id].code = text;
+    state[id].step = 'title';
+    return ctx.reply("🎬 Kino nomi:");
+  }
+
+  if (state[id]?.step === 'title') {
+    state[id].title = text;
+    state[id].step = 'video';
+    return ctx.reply("📤 Video yubor:");
+  }
+
+  // ===== SEARCH =====
+  if (state[id]) return;
+
+  let movie = data.movies.find(m => m.code === text);
+  if (!movie) return;
+
+  movie.views++;
+  saveData(data);
+
+  return ctx.replyWithVideo(movie.file_id, {
+    caption: `🎬 ${movie.title}\n👁 ${movie.views}\n👍 ${movie.likes.length}`,
+    ...Markup.inlineKeyboard([
+      [Markup.button.callback("👍 Like", `like_${movie.code}`)]
+    ])
+  });
+});
+
+// ===== VIDEO =====
+bot.on('video', (ctx) => {
+  let id = ctx.from.id;
+  let data = loadData();
+
+  if (state[id]?.step !== 'video') return;
+
+  data.movies.push({
+    code: state[id].code,
+    title: state[id].title,
+    file_id: ctx.message.video.file_id,
+    views: 0,
+    likes: []
+  });
+
+  saveData(data);
+  delete state[id];
+
+  ctx.reply("✅ Kino qo‘shildi");
+});
+
+// ===== ACTION =====
+bot.action(/like_(.+)/, (ctx) => {
+  let data = loadData();
+  let code = ctx.match[1];
+  let user = ctx.from.id;
+
+  let movie = data.movies.find(m => m.code === code);
+  if (!movie) return;
+
+  if (movie.likes.includes(user)) {
+    return ctx.answerCbQuery("❗ Oldin bosgansiz");
+  }
+
+  movie.likes.push(user);
+  saveData(data);
+
+  ctx.answerCbQuery("👍 Like bosildi");
+});
+
+bot.action(/deladmin_(.+)/, (ctx) => {
+  let data = loadData();
+  let id = Number(ctx.match[1]);
+
+  data.admins = data.admins.filter(a => a !== id);
+  saveData(data);
+
+  ctx.editMessageText("❌ Admin o‘chirildi");
+});
+
+bot.action(/delsup_(.+)/, (ctx) => {
+  let data = loadData();
+  let id = Number(ctx.match[1]);
+
+  data.supports = data.supports.filter(s => s !== id);
+  saveData(data);
+
+  ctx.editMessageText("🚫 Support o‘chirildi");
+});
+
+// ===== RUN =====
 bot.launch();
-console.log("✅ Bot ishga tushdi!");
+console.log("🚀 FINAL PRO BOT ISHLAYAPTII");
