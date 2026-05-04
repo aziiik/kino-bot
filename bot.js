@@ -1,279 +1,553 @@
-require('dotenv').config();
-const { Telegraf, Markup } = require('telegraf');
-const fs = require('fs');
+// require("dotenv").config();
+// const TelegramBot = require("node-telegram-bot-api");
+// const fs = require("fs");
 
-const bot = new Telegraf(process.env.BOT_TOKEN);
+// const bot = new TelegramBot(process.env.BOT_TOKEN, { polling: true });
 
-// ===== JSON =====
-function loadData() {
-  return JSON.parse(fs.readFileSync('data.json'));
+// const OWNER_ID = Number(process.env.ADMIN_ID);
+
+// // DATABASE
+// let db = {
+//   admins: [],
+//   supports: [],
+//   users: [],
+//   movies: {},
+//   channels: []
+// };
+
+// if (fs.existsSync("db.json")) {
+//   db = JSON.parse(fs.readFileSync("db.json"));
+// }
+
+// function save() {
+//   fs.writeFileSync("db.json", JSON.stringify(db, null, 2));
+// }
+
+// function isAdmin(id) {
+//   return id === OWNER_ID || db.admins.includes(id);
+// }
+
+// // STEP SYSTEM
+// let step = {};
+
+// // 🔒 CHECK SUB
+// async function checkSub(userId) {
+//   let notJoined = [];
+
+//   for (let ch of db.channels) {
+//     try {
+//       const res = await bot.getChatMember(ch, userId);
+//       if (!["member", "administrator", "creator"].includes(res.status)) {
+//         notJoined.push(ch);
+//       }
+//     } catch {
+//       notJoined.push(ch);
+//     }
+//   }
+
+//   return notJoined;
+// }
+
+// // START
+// bot.onText(/\/start/, async (msg) => {
+//   const id = msg.from.id;
+
+//   delete step[id]; // 🔥 STEP RESET
+
+//   if (!db.users.includes(id)) {
+//     db.users.push(id);
+//     save();
+//   }
+
+//   const notJoined = await checkSub(id);
+
+//   if (notJoined.length > 0) {
+//     return bot.sendMessage(id, "❗ Avval obuna bo‘ling:", {
+//       reply_markup: {
+//         inline_keyboard: [
+//           ...notJoined.map(ch => [
+//             { text: `📢 ${ch}`, url: `https://t.me/${ch.replace("@", "")}` }
+//           ]),
+//           [{ text: "✅ Tekshirish", callback_data: "check_sub" }]
+//         ]
+//       }
+//     });
+//   }
+
+//   bot.sendMessage(id, "🎬 Kod yuboring:");
+// });
+
+// // CALLBACK
+// bot.on("callback_query", async (q) => {
+//   const id = q.from.id;
+
+//   if (q.data === "check_sub") {
+//     const notJoined = await checkSub(id);
+
+//     if (notJoined.length === 0) {
+//       bot.answerCallbackQuery(q.id, { text: "✅ OK" });
+//       bot.sendMessage(id, "🎉 Ruxsat berildi!");
+//     } else {
+//       bot.answerCallbackQuery(q.id, {
+//         text: "❗ Obuna bo‘ling",
+//         show_alert: true
+//       });
+//     }
+//   }
+
+//   if (q.data.startsWith("del_channel_")) {
+//     const ch = q.data.replace("del_channel_", "");
+//     db.channels = db.channels.filter(c => c !== ch);
+//     save();
+
+//     bot.answerCallbackQuery(q.id, { text: "🗑 O‘chirildi" });
+//     bot.editMessageText("✅ Kanal o‘chirildi", {
+//       chat_id: q.message.chat.id,
+//       message_id: q.message.message_id
+//     });
+//   }
+// });
+
+// // ADMIN PANEL
+// bot.onText(/\/admin/, (msg) => {
+//   if (!isAdmin(msg.from.id)) return;
+
+//   delete step[msg.from.id];
+
+//   bot.sendMessage(msg.chat.id, "⚙️ Admin panel", {
+//     reply_markup: {
+//       keyboard: [
+//         ["🎬 Kino qo‘shish", "❌ Kino o‘chirish"],
+//         ["📢 Kanal qo‘shish", "❌ Kanal o‘chirish"],
+//         ["👤 Admin qo‘shish", "❌ Admin o‘chirish"],
+//         ["🛠 Support qo‘shish", "❌ Support o‘chirish"],
+//         ["📊 Statistika"]
+//       ],
+//       resize_keyboard: true
+//     }
+//   });
+// });
+
+// // MESSAGE HANDLER
+// bot.on("message", async (msg) => {
+//   const id = msg.from.id;
+//   const text = msg.text;
+
+//   if (!text) return;
+
+//   // 🔥 STEP RESET universal
+//   if (text.startsWith("/")) {
+//     delete step[id];
+//   }
+
+//   // 🎬 ADD MOVIE
+//   if (text === "🎬 Kino qo‘shish") {
+//     delete step[id];
+//     step[id] = "movie_code";
+//     return bot.sendMessage(id, "Kod yubor:");
+//   }
+
+//   if (step[id] === "movie_code") {
+//     step[id] = { code: text };
+//     return bot.sendMessage(id, "Video yubor:");
+//   }
+
+//   if (msg.video && step[id]?.code) {
+//     db.movies[step[id].code] = msg.video.file_id;
+//     save();
+//     step[id] = null;
+//     return bot.sendMessage(id, "✅ Kino qo‘shildi");
+//   }
+
+//   // ❌ DELETE MOVIE
+//   if (text === "❌ Kino o‘chirish") {
+//     delete step[id];
+//     step[id] = "del_movie";
+//     return bot.sendMessage(id, "Kod yubor:");
+//   }
+
+//   if (step[id] === "del_movie") {
+//     delete db.movies[text];
+//     save();
+//     step[id] = null;
+//     return bot.sendMessage(id, "🗑 O‘chirildi");
+//   }
+
+//   // 📢 ADD CHANNEL
+//   if (text === "📢 Kanal qo‘shish") {
+//     delete step[id];
+//     step[id] = "add_channel";
+//     return bot.sendMessage(id, "@kanal yubor:");
+//   }
+
+//   if (step[id] === "add_channel") {
+//     db.channels.push(text);
+//     save();
+//     step[id] = null;
+//     return bot.sendMessage(id, "✅ Qo‘shildi");
+//   }
+
+//   // ❌ CHANNEL DELETE
+//   if (text === "❌ Kanal o‘chirish") {
+//     delete step[id];
+
+//     if (db.channels.length === 0) {
+//       return bot.sendMessage(id, "❗ Kanal yo‘q");
+//     }
+
+//     const buttons = db.channels.map(ch => [
+//       { text: ch, callback_data: "del_channel_" + ch }
+//     ]);
+
+//     return bot.sendMessage(id, "Tanlang:", {
+//       reply_markup: { inline_keyboard: buttons }
+//     });
+//   }
+
+//   // 👤 ADMIN ADD
+//   if (text === "👤 Admin qo‘shish") {
+//     delete step[id];
+//     step[id] = "add_admin";
+//     return bot.sendMessage(id, "ID yubor:");
+//   }
+
+//   if (step[id] === "add_admin") {
+//     db.admins.push(Number(text));
+//     save();
+//     step[id] = null;
+//     return bot.sendMessage(id, "✅ Qo‘shildi");
+//   }
+
+//   // ❌ ADMIN DELETE
+//   if (text === "❌ Admin o‘chirish") {
+//     delete step[id];
+//     step[id] = "del_admin";
+//     return bot.sendMessage(id, "ID yubor:");
+//   }
+
+//   if (step[id] === "del_admin") {
+//     db.admins = db.admins.filter(a => a != text);
+//     save();
+//     step[id] = null;
+//     return bot.sendMessage(id, "🗑 O‘chirildi");
+//   }
+
+//   // 🛠 SUPPORT ADD
+//   if (text === "🛠 Support qo‘shish") {
+//     delete step[id];
+//     step[id] = "add_support";
+//     return bot.sendMessage(id, "ID yubor:");
+//   }
+
+//   if (step[id] === "add_support") {
+//     db.supports.push(Number(text));
+//     save();
+//     step[id] = null;
+//     return bot.sendMessage(id, "✅ Qo‘shildi");
+//   }
+
+//   // ❌ SUPPORT DELETE
+//   if (text === "❌ Support o‘chirish") {
+//     delete step[id];
+//     step[id] = "del_support";
+//     return bot.sendMessage(id, "ID yubor:");
+//   }
+
+//   if (step[id] === "del_support") {
+//     db.supports = db.supports.filter(s => s != text);
+//     save();
+//     step[id] = null;
+//     return bot.sendMessage(id, "🗑 O‘chirildi");
+//   }
+
+//   // 📊 STAT
+//   if (text === "📊 Statistika") {
+//     delete step[id];
+//     return bot.sendMessage(id, `👥 Users: ${db.users.length}`);
+//   }
+
+//   // 🎬 GET MOVIE
+//   if (db.movies[text]) {
+//     const notJoined = await checkSub(id);
+
+//     if (notJoined.length > 0) {
+//       return bot.sendMessage(id, "❗ Avval obuna bo‘ling");
+//     }
+
+//     return bot.sendVideo(id, db.movies[text]);
+//   }
+// });
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+require("dotenv").config();
+const TelegramBot = require("node-telegram-bot-api");
+const fs = require("fs");
+
+const bot = new TelegramBot(process.env.BOT_TOKEN, { polling: true });
+const OWNER_ID = Number(process.env.ADMIN_ID);
+
+// DATABASE
+let db = {
+  admins: [],
+  supports: [],
+  users: [],
+  movies: {},
+  channels: []
+};
+
+if (fs.existsSync("db.json")) {
+  db = JSON.parse(fs.readFileSync("db.json"));
 }
-function saveData(data) {
-  fs.writeFileSync('data.json', JSON.stringify(data, null, 2));
+
+function save() {
+  fs.writeFileSync("db.json", JSON.stringify(db, null, 2));
 }
 
-// ===== STATE =====
-let state = {};
-
-// ===== ROLE =====
 function isAdmin(id) {
-  return loadData().admins.includes(id);
-}
-function isSupport(id) {
-  return loadData().supports.includes(id);
-}
-function isStaff(id) {
-  return isAdmin(id) || isSupport(id);
+  return id === OWNER_ID || db.admins.includes(id);
 }
 
-// ===== USER SAVE =====
-bot.use((ctx, next) => {
-  let data = loadData();
-  let id = ctx.from.id;
+// STEP SYSTEM
+let step = {};
 
-  if (!data.users.includes(id)) {
-    data.users.push(id);
-    saveData(data);
+// 🔒 CHECK SUB
+async function checkSub(userId) {
+  let notJoined = [];
+
+  for (let ch of db.channels) {
+    try {
+      const res = await bot.getChatMember(ch, userId);
+      if (!["member", "administrator", "creator"].includes(res.status)) {
+        notJoined.push(ch);
+      }
+    } catch {
+      notJoined.push(ch);
+    }
   }
-  return next();
+
+  return notJoined;
+}
+
+// START
+bot.onText(/\/start/, async (msg) => {
+  const id = msg.from.id;
+
+  delete step[id];
+
+  if (!db.users.includes(id)) {
+    db.users.push(id);
+    save();
+  }
+
+  const notJoined = await checkSub(id);
+
+  if (notJoined.length > 0) {
+    return bot.sendMessage(id, "❗ Avval obuna bo‘ling:", {
+      reply_markup: {
+        inline_keyboard: [
+          ...notJoined.map(ch => [
+            { text: `📢 ${ch}`, url: `https://t.me/${ch.replace("@", "")}` }
+          ]),
+          [{ text: "✅ Tekshirish", callback_data: "check_sub" }]
+        ]
+      }
+    });
+  }
+
+  bot.sendMessage(id, "🎬 Kod yuboring:");
 });
 
-// ===== START =====
-bot.start((ctx) => {
-  ctx.reply("🎬 Kino botga xush kelibsiz!\nKod yuboring:");
+// CALLBACK
+bot.on("callback_query", async (q) => {
+  const id = q.from.id;
+
+  if (q.data === "check_sub") {
+    const notJoined = await checkSub(id);
+
+    if (notJoined.length === 0) {
+      bot.answerCallbackQuery(q.id, { text: "✅ OK" });
+      bot.sendMessage(id, "🎉 Ruxsat berildi!");
+    } else {
+      bot.answerCallbackQuery(q.id, {
+        text: "❗ Obuna bo‘ling",
+        show_alert: true
+      });
+    }
+  }
+
+  if (q.data.startsWith("del_channel_")) {
+    const ch = q.data.replace("del_channel_", "");
+    db.channels = db.channels.filter(c => c !== ch);
+    save();
+
+    bot.answerCallbackQuery(q.id, { text: "🗑 O‘chirildi" });
+    bot.editMessageText("✅ Kanal o‘chirildi", {
+      chat_id: q.message.chat.id,
+      message_id: q.message.message_id
+    });
+  }
 });
 
-// ===== ADMIN PANEL =====
-bot.command('admin', (ctx) => {
-  if (!isStaff(ctx.from.id)) return ctx.reply("❌ Ruxsat yo‘q");
+// ADMIN PANEL
+bot.onText(/\/admin/, (msg) => {
+  if (!isAdmin(msg.from.id)) return;
 
-  ctx.reply("⚙️ Panel:", Markup.keyboard([
-    ['➕ Kino qo‘shish','❌ Kino o‘chirish'],
-    ['📢 Xabar yuborish','📊 Statistika'],
-    ['👑 Admin qo‘shish','❌ Admin o‘chirish'],
-    ['🛠 Support qo‘shish','🚫 Support o‘chirish']
-  ]).resize());
+  delete step[msg.from.id];
+
+  bot.sendMessage(msg.chat.id, "⚙️ Admin panel", {
+    reply_markup: {
+      keyboard: [
+        ["🎬 Kino qo‘shish", "❌ Kino o‘chirish"],
+        ["📢 Kanal qo‘shish", "❌ Kanal o‘chirish"],
+        ["📨 Xabar yuborish", "📊 Statistika"],
+        ["👤 Admin qo‘shish", "❌ Admin o‘chirish"],
+        ["🛠 Support qo‘shish", "❌ Support o‘chirish"]
+      ],
+      resize_keyboard: true
+    }
+  });
 });
 
-// ===== TEXT =====
-bot.on('text', async (ctx) => {
-  let id = ctx.from.id;
-  let text = ctx.message.text;
-  let data = loadData();
+// MESSAGE HANDLER
+bot.on("message", async (msg) => {
+  const id = msg.from.id;
+  const text = msg.text;
 
-  // ===== PANEL BUTTONS =====
-  if (text === '➕ Kino qo‘shish') {
-    if (!isStaff(id)) return;
-    state[id] = { step: 'code' };
-    return ctx.reply("🎬 Kino kodi:");
+  if (!text) return;
+
+  if (text.startsWith("/")) {
+    delete step[id];
   }
 
-  if (text === '❌ Kino o‘chirish') {
-    if (!isStaff(id)) return;
-    state[id] = { step: 'del_movie' };
-    return ctx.reply("❗ O‘chiriladigan kino kodini yubor:");
+  // 🎬 ADD MOVIE
+  if (text === "🎬 Kino qo‘shish") {
+    delete step[id];
+    step[id] = "movie_code";
+    return bot.sendMessage(id, "Kod yubor:");
   }
 
-  if (text === '📢 Xabar yuborish') {
-    if (!isStaff(id)) return;
-    state[id] = { step: 'broadcast' };
-    return ctx.reply("✍️ Xabar yoz:");
+  if (step[id] === "movie_code") {
+    step[id] = { code: text };
+    return bot.sendMessage(id, "Video yubor:");
   }
 
-  if (text === '📊 Statistika') {
-    let totalLikes = data.movies.reduce((a,m)=>a + m.likes.length,0);
-
-    let topView = [...data.movies].sort((a,b)=>b.views-a.views)[0];
-    let topLike = [...data.movies].sort((a,b)=>b.likes.length-a.likes.length)[0];
-
-    return ctx.reply(`📊 BOT STATISTIKASI
-
-👥 Foydalanuvchilar: ${data.users.length}
-🎬 Kinolar soni: ${data.movies.length}
-👍 Umumiy like: ${totalLikes}
-
-🔥 Eng ko‘p ko‘rilgan:
-${topView ? topView.title + " (" + topView.views + ")" : "yo‘q"}
-
-❤️ Eng ko‘p like:
-${topLike ? topLike.title + " (" + topLike.likes.length + ")" : "yo‘q"}
-`);
+  if (msg.video && step[id]?.code) {
+    db.movies[step[id].code] = msg.video.file_id;
+    save();
+    step[id] = null;
+    return bot.sendMessage(id, "✅ Kino qo‘shildi");
   }
 
-  if (text === '👑 Admin qo‘shish') {
-    if (!isAdmin(id)) return;
-    state[id] = { step: 'add_admin' };
-    return ctx.reply("Admin ID:");
+  // ❌ DELETE MOVIE
+  if (text === "❌ Kino o‘chirish") {
+    delete step[id];
+    step[id] = "del_movie";
+    return bot.sendMessage(id, "Kod yubor:");
   }
 
-  if (text === '❌ Admin o‘chirish') {
-    if (!isAdmin(id)) return;
-
-    return ctx.reply("Adminlar:", Markup.inlineKeyboard(
-      data.admins.map(a => [
-        Markup.button.callback(`❌ ${a}`, `deladmin_${a}`)
-      ])
-    ));
+  if (step[id] === "del_movie") {
+    delete db.movies[text];
+    save();
+    step[id] = null;
+    return bot.sendMessage(id, "🗑 O‘chirildi");
   }
 
-  if (text === '🛠 Support qo‘shish') {
-    if (!isAdmin(id)) return;
-    state[id] = { step: 'add_support' };
-    return ctx.reply("Support ID:");
+  // 📢 ADD CHANNEL
+  if (text === "📢 Kanal qo‘shish") {
+    delete step[id];
+    step[id] = "add_channel";
+    return bot.sendMessage(id, "@kanal yubor:");
   }
 
-  if (text === '🚫 Support o‘chirish') {
-    if (!isAdmin(id)) return;
-
-    return ctx.reply("Supportlar:", Markup.inlineKeyboard(
-      data.supports.map(s => [
-        Markup.button.callback(`❌ ${s}`, `delsup_${s}`)
-      ])
-    ));
+  if (step[id] === "add_channel") {
+    db.channels.push(text);
+    save();
+    step[id] = null;
+    return bot.sendMessage(id, "✅ Qo‘shildi");
   }
 
-  // ===== STATE =====
-  if (state[id]?.step === 'broadcast') {
-    delete state[id];
+  // ❌ CHANNEL DELETE
+  if (text === "❌ Kanal o‘chirish") {
+    delete step[id];
 
-    for (let user of data.users) {
+    if (db.channels.length === 0) {
+      return bot.sendMessage(id, "❗ Kanal yo‘q");
+    }
+
+    const buttons = db.channels.map(ch => [
+      { text: ch, callback_data: "del_channel_" + ch }
+    ]);
+
+    return bot.sendMessage(id, "Tanlang:", {
+      reply_markup: { inline_keyboard: buttons }
+    });
+  }
+
+  // 📢 BROADCAST
+  if (text === "📨 Xabar yuborish") {
+    delete step[id];
+    step[id] = "broadcast";
+    return bot.sendMessage(id, "Xabar yozing:");
+  }
+
+  if (step[id] === "broadcast") {
+    let ok = 0;
+    let no = 0;
+
+    for (let user of db.users) {
       try {
-        await ctx.telegram.sendMessage(user, text);
-      } catch {}
+        await bot.sendMessage(user, text);
+        ok++;
+      } catch {
+        no++;
+      }
     }
 
-    return ctx.reply("✅ Yuborildi");
+    step[id] = null;
+
+    return bot.sendMessage(id,
+      `✅ Tugadi\n\n📤 Yuborildi: ${ok}\n❌ Xato: ${no}`
+    );
   }
 
-  if (state[id]?.step === 'add_admin') {
-    let uid = Number(text);
+  // 📊 STAT
+  if (text === "📊 Statistika") {
+    delete step[id];
 
-    if (!data.admins.includes(uid)) {
-      data.admins.push(uid);
-      saveData(data);
+    return bot.sendMessage(id,
+`📊 STATISTIKA
+
+👥 Users: ${db.users.length}
+🎬 Kino: ${Object.keys(db.movies).length}
+📢 Kanal: ${db.channels.length}
+👤 Admin: ${db.admins.length + 1}
+🛠 Support: ${db.supports.length}`
+    );
+  }
+
+  // 🎬 GET MOVIE
+  if (db.movies[text]) {
+    const notJoined = await checkSub(id);
+
+    if (notJoined.length > 0) {
+      return bot.sendMessage(id, "❗ Avval obuna bo‘ling");
     }
 
-    delete state[id];
-    return ctx.reply("✅ Admin qo‘shildi");
+    return bot.sendVideo(id, db.movies[text]);
   }
-
-  if (state[id]?.step === 'add_support') {
-    let uid = Number(text);
-
-    if (!data.supports.includes(uid)) {
-      data.supports.push(uid);
-      saveData(data);
-    }
-
-    delete state[id];
-    return ctx.reply("✅ Support qo‘shildi");
-  }
-
-  if (state[id]?.step === 'del_movie') {
-    let code = text;
-
-    let oldLen = data.movies.length;
-    data.movies = data.movies.filter(m => m.code !== code);
-
-    saveData(data);
-    delete state[id];
-
-    if (data.movies.length === oldLen) {
-      return ctx.reply("❌ Bunday kino topilmadi");
-    }
-
-    return ctx.reply("✅ Kino o‘chirildi");
-  }
-
-  if (state[id]?.step === 'code') {
-    state[id].code = text;
-    state[id].step = 'title';
-    return ctx.reply("🎬 Kino nomi:");
-  }
-
-  if (state[id]?.step === 'title') {
-    state[id].title = text;
-    state[id].step = 'video';
-    return ctx.reply("📤 Video yubor:");
-  }
-
-  // ===== SEARCH =====
-  if (state[id]) return;
-
-  let movie = data.movies.find(m => m.code === text);
-  if (!movie) return;
-
-  movie.views++;
-  saveData(data);
-
-  return ctx.replyWithVideo(movie.file_id, {
-    caption: `🎬 ${movie.title}\n👁 ${movie.views}\n👍 ${movie.likes.length}`,
-    ...Markup.inlineKeyboard([
-      [Markup.button.callback("👍 Like", `like_${movie.code}`)]
-    ])
-  });
 });
-
-// ===== VIDEO =====
-bot.on('video', (ctx) => {
-  let id = ctx.from.id;
-  let data = loadData();
-
-  if (state[id]?.step !== 'video') return;
-
-  data.movies.push({
-    code: state[id].code,
-    title: state[id].title,
-    file_id: ctx.message.video.file_id,
-    views: 0,
-    likes: []
-  });
-
-  saveData(data);
-  delete state[id];
-
-  ctx.reply("✅ Kino qo‘shildi");
-});
-
-// ===== ACTION =====
-bot.action(/like_(.+)/, (ctx) => {
-  let data = loadData();
-  let code = ctx.match[1];
-  let user = ctx.from.id;
-
-  let movie = data.movies.find(m => m.code === code);
-  if (!movie) return;
-
-  if (movie.likes.includes(user)) {
-    return ctx.answerCbQuery("❗ Oldin bosgansiz");
-  }
-
-  movie.likes.push(user);
-  saveData(data);
-
-  ctx.answerCbQuery("👍 Like bosildi");
-});
-
-bot.action(/deladmin_(.+)/, (ctx) => {
-  let data = loadData();
-  let id = Number(ctx.match[1]);
-
-  data.admins = data.admins.filter(a => a !== id);
-  saveData(data);
-
-  ctx.editMessageText("❌ Admin o‘chirildi");
-});
-
-bot.action(/delsup_(.+)/, (ctx) => {
-  let data = loadData();
-  let id = Number(ctx.match[1]);
-
-  data.supports = data.supports.filter(s => s !== id);
-  saveData(data);
-
-  ctx.editMessageText("🚫 Support o‘chirildi");
-});
-
-// ===== RUN =====
-bot.launch();
-console.log("🚀 FINAL PRO BOT ISHLAYAPTII");
